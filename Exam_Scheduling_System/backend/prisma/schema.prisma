@@ -1,0 +1,105 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Department {
+  id      String   @id @default(cuid())
+  name    String   @unique
+  courses Course[]
+}
+
+model Course {
+  id          String      @id @default(cuid())
+  code        String
+  name        String
+  classLevel  Int
+  department  Department  @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  departmentId String
+  examRequests ExamRequest[]
+  examSessions ExamSession[]
+
+  @@unique([code, departmentId])
+}
+
+model Room {
+  id        String  @id @default(cuid())
+  name      String  @unique
+  capacity  Int
+  allocations ExamRoomAllocation[]
+}
+
+model Teacher {
+  id            String               @id @default(cuid())
+  name          String               @unique
+  availability  TeacherAvailability[]
+  examRequests  ExamRequest[]
+  examSessions  ExamSession[]
+}
+
+model TeacherAvailability {
+  id        String  @id @default(cuid())
+  teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  teacherId String
+  dayOfWeek Int     // 0=Mon ... 6=Sun
+
+  @@unique([teacherId, dayOfWeek])
+}
+
+model ExamRequest {
+  id           String   @id @default(cuid())
+  course       Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseId     String
+  teacher      Teacher  @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+  teacherId    String
+  studentCount Int
+  durationMinutes Int   @default(120)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Schedule {
+  id          String        @id @default(cuid())
+  name        String
+  days        String        // JSON array of dayOfWeek ints
+  slots       String        // JSON array of start times e.g. ["09:00","13:00"] (starts should be whole hours)
+  createdAt   DateTime      @default(now())
+  examSessions ExamSession[]
+}
+
+model ExamSession {
+  id           String      @id @default(cuid())
+  schedule     Schedule    @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  scheduleId   String
+  course       Course      @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseId     String
+  teacher      Teacher     @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+  teacherId    String
+  dayOfWeek    Int
+  slotIndex    Int
+  // nullable for backward compatibility with existing rows
+  startMinuteOfDay Int?
+  endMinuteOfDay   Int?
+  durationMinutes  Int?
+
+  allocations  ExamRoomAllocation[]
+
+  @@index([scheduleId, dayOfWeek, slotIndex])
+}
+
+model ExamRoomAllocation {
+  id           String      @id @default(cuid())
+  examSession  ExamSession @relation(fields: [examSessionId], references: [id], onDelete: Cascade)
+  examSessionId String
+  room         Room        @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  roomId       String
+  assignedStudents Int
+
+  @@unique([roomId, examSessionId])
+  @@index([roomId])
+}
+
